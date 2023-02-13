@@ -1,4 +1,4 @@
-# Quora Homework Answers
+# Joe's Quora Homework Answers
 
 ## License
 
@@ -44,12 +44,12 @@ the effective width of code blocks over the years to the point that I often
 only have ~30 characters of width to work with.  Here, I allow myself a full 80
 columns to work with.
 
-As of January 2023, I've written over 5400 Quora answers.  It's going to take
-me awhile to catalog a signficant fraction of my creative programming
-homework answers here.  Who knows how far I will get with this before I forget
-about it.
+As of January 2023, I've written over 5400 Quora answers.  I've spent a few
+weeks going through my history, cataloging most of my creative programming
+homework answers here. 
 
-Also, I won't be including _every_ such answer.  Some are better than others.
+Also, I haven't included _every_ such answer.  Some are better than others, and
+a few were left on the cutting room floor..
 
 ## My Other Quora-Related Repos
 
