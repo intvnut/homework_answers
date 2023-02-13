@@ -1,0 +1,13 @@
+SCREEN 1
+SUM = 0
+FOR I% = 1 TO 99 STEP 2
+  CLS
+  LINE (1,1)-(I%,I%),1,BF
+  FOR Y% = 0 TO 199
+    FOR X% = 0 TO 319
+      SUM = SUM + POINT(X%,Y%)
+    NEXT X%
+  NEXT Y%
+NEXT I%
+CLS
+PRINT "SUM = "; SUM

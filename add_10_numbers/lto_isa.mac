@@ -1,0 +1,2008 @@
+;; ======================================================================== ;;
+;;  LTO Extended Instruction Set                                            ;;
+;; ======================================================================== ;;
+
+    IF (DEFINED _LTO_ISA) = 0
+        LISTING "code"
+_LTO_ISA_MAC    QEQU   1
+
+X0              QEQU    $9F90
+X1              QEQU    $9F91
+X2              QEQU    $9F92
+X3              QEQU    $9F93
+X4              QEQU    $9F94
+X5              QEQU    $9F95
+X6              QEQU    $9F96
+X7              QEQU    $9F97
+X8              QEQU    $9F98
+X9              QEQU    $9F99
+XA              QEQU    $9F9A
+XB              QEQU    $9F9B
+XC              QEQU    $9F9C
+XD              QEQU    $9F9D
+XE              QEQU    $9F9E
+XF              QEQU    $9F9F
+
+PV              QEQU    $9F8D   ; Previous Value
+
+
+.op.mvo         QEQU    1001000000b
+.op.mvi         QEQU    1010000000b
+.op.add         QEQU    1011000000b
+.op.sub         QEQU    1100000000b
+.op.cmp         QEQU    1101000000b
+.op.and         QEQU    1110000000b
+.op.xor         QEQU    1111000000b
+.op.atadd       QEQU    .op.mvo + (1 SHL 10)
+.op.atand       QEQU    .op.mvo + (2 SHL 10)
+.op.ator        QEQU    .op.mvo + (3 SHL 10)
+
+.op.read        QEQU    1
+.op.write       QEQU    2
+.op.atomic      QEQU    3
+
+.reg.r.R0       QEQU    0
+.reg.r.R1       QEQU    1
+.reg.r.R2       QEQU    2
+.reg.r.R3       QEQU    3
+.reg.r.R4       QEQU    4
+.reg.r.R5       QEQU    5
+.reg.r.R6       QEQU    6
+.reg.r.R7       QEQU    7
+.reg.r.SP       QEQU    6
+.reg.r.PC       QEQU    7
+.reg.x.X0       QEQU    $0
+.reg.x.X1       QEQU    $1
+.reg.x.X2       QEQU    $2
+.reg.x.X3       QEQU    $3
+.reg.x.X4       QEQU    $4
+.reg.x.X5       QEQU    $5
+.reg.x.X6       QEQU    $6
+.reg.x.X7       QEQU    $7
+.reg.x.X8       QEQU    $8
+.reg.x.X9       QEQU    $9
+.reg.x.XA       QEQU    $A
+.reg.x.XB       QEQU    $B
+.reg.x.XC       QEQU    $C
+.reg.x.XD       QEQU    $D
+.reg.x.XE       QEQU    $E
+.reg.x.XF       QEQU    $F
+.reg.any.R0     QEQU    0
+.reg.any.R1     QEQU    1
+.reg.any.R2     QEQU    2
+.reg.any.R3     QEQU    3
+.reg.any.R4     QEQU    4
+.reg.any.R5     QEQU    5
+.reg.any.R6     QEQU    6
+.reg.any.R7     QEQU    7
+.reg.any.SP     QEQU    6
+.reg.any.PC     QEQU    7
+.reg.any.X0     QEQU    $0
+.reg.any.X1     QEQU    $1
+.reg.any.X2     QEQU    $2
+.reg.any.X3     QEQU    $3
+.reg.any.X4     QEQU    $4
+.reg.any.X5     QEQU    $5
+.reg.any.X6     QEQU    $6
+.reg.any.X7     QEQU    $7
+.reg.any.X8     QEQU    $8
+.reg.any.X9     QEQU    $9
+.reg.any.XA     QEQU    $A
+.reg.any.XB     QEQU    $B
+.reg.any.XC     QEQU    $C
+.reg.any.XD     QEQU    $D
+.reg.any.XE     QEQU    $E
+.reg.any.XF     QEQU    $F
+
+
+; Sad: Can't use (DEFINED) trick here when allowing arbitrary expressions
+MACRO   __is_reg_r(op)
+((ASC("%op%",0) = 'R' AND ASC("%op%",1) >= '0' AND ASC("%op%",1) <= '7') OR (ASC("%op%",0) = 'S' AND ASC("%op%",1) = 'P') OR (ASC("%op%",0) = 'P' AND ASC("%op%", 1) = 'C'))
+ENDM
+
+MACRO   __is_reg_x(op)
+(ASC("%op%",0) = 'X' AND ((ASC("%op%",1) >= '0' AND ASC("%op%",1) <= '9') OR (ASC("%op%",1) >= 'A' AND ASC("%op%",1) <= 'F')))
+ENDM
+
+MACRO   __is_reg(type,op)
+(STRLEN("%op%") = 2 AND __is_reg_%type%(%op%))
+ENDM
+
+MACRO   __reg_num(type,reg)
+(.reg.%type%.%reg%)
+ENDM
+
+MACRO   __amode(xa,xr,r,rdok,wrok,atok,hasofs,ofs)
+    IF (.am.rw = .op.read) AND (%rdok% = 0)
+        ERR "Addressing mode cannot be used with MVI/ADD/SUB/CMP/AND/XOR"
+    ENDI
+    IF (.am.rw = .op.write) AND (%wrok% = 0)
+        ERR "Addressing mode cannot be used with MVO"
+    ENDI
+    IF (.am.rw = .op.atomic) AND (%atok% = 0)
+        ERR "Addressing mode cannot be used with atomic operations"
+    ENDI
+.am.ext QSET (%xa% SHL 13) OR (%xr% SHL 10) OR (%r% SHL 3)
+    IF (%hasofs%)
+        DECLE   .am.op + .am.ext, %ofs%
+    ELSE
+        DECLE   .am.op + .am.ext
+    ENDI
+ENDM
+
+MACRO __is_extended_addr_mode(x)
+(((ASC("%x%",0) = '@') AND (ASC("%x%",1) <> '@')) OR (ASC("%x%",0) = '&'))
+ENDM
+
+MACRO __expand_op op,type,reg,addr
+    IF __is_extended_addr_mode(%addr%) OR (.op.%type% = .op.atomic)
+.am.op  QSET    .op.%op% + __reg_num(any,%reg%)
+.am.rw  QSET    .op.%type%
+        %addr%
+    ELSE
+        ; %op% is lowercase, which prevents multiple macro re-expansion
+        ; We use the native opcode instead of DECLE to preserve the semantics
+        ; of $ for PC relative addressing.  The semantics of $ will differ
+        ; for ext-addr instructions, but that's OK since there isn't existing
+        ; code using ext-addr that we need to be backward compatible with,
+        ; so we can define the semantics as we wish.
+        IF .op.%op% = .op.mvo
+            mvo %reg%, %addr%
+        ELSE
+            %op% %addr%, %reg%
+        ENDI
+    ENDI
+ENDM
+
+MACRO   MVO     reg, addr
+    LISTING "code"
+    __expand_op mvo,write,%reg%,%addr%
+    LISTING "prev"
+ENDM
+
+MACRO   MVI     addr, reg
+    LISTING "code"
+    __expand_op mvi,read,%reg%,%addr%
+    LISTING "prev"
+ENDM
+
+MACRO   ADD     addr, reg
+    LISTING "code"
+    __expand_op add,read,%reg%,%addr%
+    LISTING "prev"
+ENDM
+
+MACRO   SUB     addr, reg
+    LISTING "code"
+    __expand_op sub,read,%reg%,%addr%
+    LISTING "prev"
+ENDM
+
+MACRO   CMP     addr, reg
+    LISTING "code"
+    __expand_op cmp,read,%reg%,%addr%
+    LISTING "prev"
+ENDM
+
+; Extra '_' gives me a sad, but is necessary because it's also an
+; assembler keyword
+MACRO   AND_    addr, reg
+    LISTING "code"
+    __expand_op and,read,%reg%,%addr%
+    LISTING "prev"
+ENDM
+
+; Extra '_' gives me a sad, but is necessary because it's also an
+; assembler keyword
+MACRO   XOR_    addr, reg
+    LISTING "code"
+    __expand_op xor,read,%reg%,%addr%
+    LISTING "prev"
+ENDM
+
+; Atomic operations: Atomic Add, Atomic And, Atomic Or
+MACRO   ATADD   reg, addr
+    LISTING "code"
+    __expand_op atadd,atomic,%reg%,%addr%
+    LISTING "prev"
+ENDM
+
+MACRO   ATAND   reg, addr
+    LISTING "code"
+    __expand_op atand,atomic,%reg%,%addr%
+    LISTING "prev"
+ENDM
+
+MACRO   ATOR    reg, addr
+    LISTING "code"
+    __expand_op ator,atomic,%reg%,%addr%
+    LISTING "prev"
+ENDM
+
+;; Aliases for standard indirect addressing modes
+MACRO   @R1
+        __amode(0,0,1,1,1,1,0,$DEADBEEF)
+ENDM
+
+MACRO   @R2
+        __amode(0,0,2,1,1,1,0,$DEADBEEF)
+ENDM
+
+MACRO   @R3
+        __amode(0,0,3,1,1,1,0,$DEADBEEF)
+ENDM
+
+MACRO   @R4++
+        __amode(0,0,4,1,1,1,0,$DEADBEEF)
+ENDM
+
+MACRO   @R5++
+        __amode(0,0,5,1,1,1,0,$DEADBEEF)
+ENDM
+
+MACRO   @--R6
+        __amode(0,0,6,1,0,1,0,$DEADBEEF)
+ENDM
+
+MACRO   @--SP
+        __amode(0,0,6,1,0,1,0,$DEADBEEF)
+ENDM
+
+MACRO   @R6++
+        __amode(0,0,6,0,1,1,0,$DEADBEEF)
+ENDM
+
+MACRO   @SP++
+        __amode(0,0,6,0,1,1,0,$DEADBEEF)
+ENDM
+
+MACRO   @R7++
+        __amode(0,0,7,1,0,0,0,$DEADBEEF)
+ENDM
+
+MACRO   @PC++
+        __amode(0,0,7,1,0,0,0,$DEADBEEF)
+ENDM
+
+;; Extended mode 00:  Effective Address mode.  Returns Xr+ofs as an immediate.
+MACRO   &X1(ofs)
+        __amode(0,1,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   &X2(ofs)
+        __amode(0,2,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   &X3(ofs)
+        __amode(0,3,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   &X4(ofs)
+        __amode(0,4,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   &X5(ofs)
+        __amode(0,5,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   &X6(ofs)
+        __amode(0,6,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   &X7(ofs)
+        __amode(0,7,0,1,1,0,1,%ofs%)
+ENDM
+
+
+;; Extended mode 01:  Indirect-indexed.  Accesses location (Xr + ofs)
+MACRO   @X0(ofs)
+        __amode(1,0,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @X1(ofs)
+        __amode(1,1,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @X2(ofs)
+        __amode(1,2,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @X3(ofs)
+        __amode(1,3,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @X4(ofs)
+        __amode(1,4,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @X5(ofs)
+        __amode(1,5,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @X6(ofs)
+        __amode(1,6,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @X7(ofs)
+        __amode(1,7,0,1,1,0,1,%ofs%)
+ENDM
+
+;; Extended mode 10:  Indirect post-increment.  Accesses location (Xr).
+;; Updates Xr by adding ofs afterwards.
+MACRO   @X0++(ofs)
+        __amode(2,0,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @X1++(ofs)
+        __amode(2,1,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @X2++(ofs)
+        __amode(2,2,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @X3++(ofs)
+        __amode(2,3,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @X4++(ofs)
+        __amode(2,4,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @X5++(ofs)
+        __amode(2,5,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @X6++(ofs)
+        __amode(2,6,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @X7++(ofs)
+        __amode(2,7,0,1,1,0,1,%ofs%)
+ENDM
+
+;; Extended mode 10:  Indirect post-decrement.  Accesses location (Xr).
+;; Updates Xr by subtracting ofs afterwards.
+MACRO   @X0--(ofs)
+        __amode(2,0,0,1,1,0,1,-(%ofs%))
+ENDM
+
+MACRO   @X1--(ofs)
+        __amode(2,1,0,1,1,0,1,-(%ofs%))
+ENDM
+
+MACRO   @X2--(ofs)
+        __amode(2,2,0,1,1,0,1,-(%ofs%))
+ENDM
+
+MACRO   @X3--(ofs)
+        __amode(2,3,0,1,1,0,1,-(%ofs%))
+ENDM
+
+MACRO   @X4--(ofs)
+        __amode(2,4,0,1,1,0,1,-(%ofs%))
+ENDM
+
+MACRO   @X5--(ofs)
+        __amode(2,5,0,1,1,0,1,-(%ofs%))
+ENDM
+
+MACRO   @X6--(ofs)
+        __amode(2,6,0,1,1,0,1,-(%ofs%))
+ENDM
+
+MACRO   @X7--(ofs)
+        __amode(2,7,0,1,1,0,1,-(%ofs%))
+ENDM
+
+
+;; Extended mode 11:  Indirect pre-increment.  Accesses location (Xr + ofs).
+;; Updates Xr by adding ofs afterwards.
+MACRO   @++X0(ofs)
+        __amode(3,0,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @++X1(ofs)
+        __amode(3,1,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @++X2(ofs)
+        __amode(3,2,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @++X3(ofs)
+        __amode(3,3,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @++X4(ofs)
+        __amode(3,4,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @++X5(ofs)
+        __amode(3,5,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @++X6(ofs)
+        __amode(3,6,0,1,1,0,1,%ofs%)
+ENDM
+
+MACRO   @++X7(ofs)
+        __amode(3,7,0,1,1,0,1,%ofs%)
+ENDM
+
+;; Extended mode 11:  Indirect pre-decrement.  Accesses location (Xr - ofs).
+;; Updates Xr by subtracting ofs afterwards.
+MACRO   @--X0(ofs)
+        __amode(3,0,0,1,1,0,1,-(%ofs%))
+ENDM
+
+MACRO   @--X1(ofs)
+        __amode(3,1,0,1,1,0,1,-(%ofs%))
+ENDM
+
+MACRO   @--X2(ofs)
+        __amode(3,2,0,1,1,0,1,-(%ofs%))
+ENDM
+
+MACRO   @--X3(ofs)
+        __amode(3,3,0,1,1,0,1,-(%ofs%))
+ENDM
+
+MACRO   @--X4(ofs)
+        __amode(3,4,0,1,1,0,1,-(%ofs%))
+ENDM
+
+MACRO   @--X5(ofs)
+        __amode(3,5,0,1,1,0,1,-(%ofs%))
+ENDM
+
+MACRO   @--X6(ofs)
+        __amode(3,6,0,1,1,0,1,-(%ofs%))
+ENDM
+
+MACRO   @--X7(ofs)
+        __amode(3,7,0,1,1,0,1,-(%ofs%))
+ENDM
+
+;; ADD3: Adds Reg + Imm and writes it to XReg
+;;  This is address mode 00 w/ MVO, and is 11 cycles; not entirely useful
+;;  if we add long immediate to MVOI, which only takes 9 cycles.
+MACRO   ADD3x reg,imm,xreg
+    LISTING "code"
+    IF __is_reg_x(%xreg%) = 0
+        ERR "ADD3x can only write to X1 through X7"
+    ENDI
+    IF __is_reg_r(%reg%) = 0
+        ERR "ADD3x can only read from R0 through R7"
+    ENDI
+        DECLE .op.mvo + __reg_num(r,%reg%) + (__reg_num(x,%xreg%) SHL 10), %imm%
+    LISTING "prev"
+ENDM
+
+;; Extended instruction set
+.xop.opc.add        QEQU    00000000b SHL 8     ; "nadd" if S=1
+.xop.opc.addfx      QEQU    00000001b SHL 8     ; "naddfx" if S=1
+.xop.opc.sub        QEQU    00000010b SHL 8
+.xop.opc.subfx      QEQU    00000011b SHL 8
+.xop.opc.and        QEQU    00000100b SHL 8     ; "nand" if S=1
+.xop.opc.andn       QEQU    00000101b SHL 8     ; "orn" if S=1
+.xop.opc.or         QEQU    00000110b SHL 8     ; "nor" if S=1
+.xop.opc.xor        QEQU    00000111b SHL 8     ; "xnor" if S=1
+                
+.xop.opc.shl        QEQU    00001000b SHL 8
+.xop.opc.shlu       QEQU    00001001b SHL 8
+.xop.opc.shr        QEQU    00001010b SHL 8
+.xop.opc.shru       QEQU    00001011b SHL 8
+.xop.opc.bshlu      QEQU    00001100b SHL 8
+.xop.opc.bshru      QEQU    00001101b SHL 8
+.xop.opc.rol        QEQU    00001110b SHL 8
+.xop.opc.ror        QEQU    00001111b SHL 8
+                
+.xop.opc.bitcntl    QEQU    00010000b SHL 8
+.xop.opc.bitcntr    QEQU    00010001b SHL 8
+.xop.opc.bitrevl    QEQU    00010010b SHL 8
+.xop.opc.bitrevr    QEQU    00010011b SHL 8
+.xop.opc.lmo        QEQU    00010100b SHL 8
+.xop.opc.lmz        QEQU    00010101b SHL 8
+.xop.opc.rmo        QEQU    00010110b SHL 8
+.xop.opc.rmz        QEQU    00010111b SHL 8
+                
+.xop.opc.repack     QEQU    00011000b SHL 8
+.xop.opc.packl      QEQU    00011001b SHL 8
+.xop.opc.packh      QEQU    00011010b SHL 8
+.xop.opc.packlh     QEQU    00011011b SHL 8
+.xop.opc.btog       QEQU    00011100b SHL 8
+.xop.opc.bset       QEQU    00011101b SHL 8
+.xop.opc.bclr       QEQU    00011110b SHL 8
+.xop.opc.cmpeq      QEQU    00011111b SHL 8
+
+.xop.opc.cmpltu     QEQU    00100000b SHL 8
+.xop.opc.cmpltfxu   QEQU    00100001b SHL 8
+.xop.opc.cmpleu     QEQU    00100010b SHL 8
+.xop.opc.cmplefxu   QEQU    00100011b SHL 8
+.xop.opc.cmpltua    QEQU    00100100b SHL 8
+.xop.opc.cmpltfxua  QEQU    00100101b SHL 8
+.xop.opc.cmpleua    QEQU    00100110b SHL 8
+.xop.opc.cmplefxua  QEQU    00100111b SHL 8
+
+.xop.opc.cmplt      QEQU    00101000b SHL 8
+.xop.opc.cmpltfx    QEQU    00101001b SHL 8
+.xop.opc.cmple      QEQU    00101010b SHL 8
+.xop.opc.cmplefx    QEQU    00101011b SHL 8
+.xop.opc.cmplta     QEQU    00101100b SHL 8
+.xop.opc.cmpltfxa   QEQU    00101101b SHL 8
+.xop.opc.cmplea     QEQU    00101110b SHL 8
+.xop.opc.cmplefxa   QEQU    00101111b SHL 8
+
+.xop.opc.min        QEQU    00110000b SHL 8
+.xop.opc.minfx      QEQU    00110001b SHL 8
+.xop.opc.max        QEQU    00110010b SHL 8
+.xop.opc.maxfx      QEQU    00110011b SHL 8
+.xop.opc.bound      QEQU    00110100b SHL 8
+.xop.opc.boundfx    QEQU    00110101b SHL 8
+.xop.opc.addcirc    QEQU    00110110b SHL 8
+.xop.opc.subcirc    QEQU    00110111b SHL 8
+
+.xop.opc.atan2      QEQU    00111000b SHL 8
+.xop.opc.atan2fx    QEQU    00111001b SHL 8
+.xop.opc.subabs     QEQU    00111010b SHL 8
+.xop.opc.subabsfx   QEQU    00111011b SHL 8
+.xop.opc.dist       QEQU    00111100b SHL 8
+.xop.opc.distfx     QEQU    00111101b SHL 8
+.xop.opc.sumsq      QEQU    00111110b SHL 8
+.xop.opc.sumsqfx    QEQU    00111111b SHL 8
+                
+.xop.opc.mpyss      QEQU    01000000b SHL 8     ; MPYUU if S=1
+.xop.opc.mpyfxss    QEQU    01000001b SHL 8     ; MPYUU if S=1
+.xop.opc.mpysu      QEQU    01000010b SHL 8
+.xop.opc.mpyfxsu    QEQU    01000011b SHL 8
+.xop.opc.mpyus      QEQU    01000100b SHL 8
+.xop.opc.mpyfxus    QEQU    01000101b SHL 8
+.xop.opc.mpy16      QEQU    01000110b SHL 8
+.xop.opc.isqrt      QEQU    01000111b SHL 8
+
+.xop.opc.aal        QEQU    01001000b SHL 8
+.xop.opc.aah        QEQU    01001001b SHL 8
+.xop.opc.divs       QEQU    01001010b SHL 8
+.xop.opc.divfxs     QEQU    01001011b SHL 8
+.xop.opc.divu       QEQU    01001100b SHL 8
+.xop.opc.divfxu     QEQU    01001101b SHL 8
+.xop.opc.div32s     QEQU    01001110b SHL 8
+.xop.opc.div32u     QEQU    01001111b SHL 8
+
+.xop.opc.cmpeqa     QEQU    01100000b SHL 8
+.xop.opc.readint    QEQU    01100001b SHL 8
+
+;; TODO: add opcode definitions and macros for 01010000b and up.
+
+
+;;  In the primary extended opcode format, we have:
+;;
+;;   1 1 1 1 1 1                 1 1 1 1 1 1 
+;;   5 4 3 2 1 0       2 1 0     5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0
+;;  +---+-+---+-+     +-----+   +---------------+-------+-+-----+
+;;  |0 0|0|s2t|S| ... | s1r |   |    opcode     | src2  |0| dst |
+;;  +---+-+---+-+     +-----+   +---------------+-------+-+-----+
+;;
+;;  +---+-+---+-+     +-----+   +---------------+-------+-+-----+
+;;  |0 0|1|s2t|S| ... | s1x |   |    opcode     | src2  |0| dst |
+;;  +---+-+---+-+     +-----+   +---------------+-------+-+-----+
+;;
+;;  s1r/s1x along with bit 13 specify src1.  Based on bit 13:
+;;
+;;      0:      s1r specifies a CPU register R0..R7
+;;      1:      s1x specifies a extended register X0..X7
+;;
+;;  s2t specifies the 'type' for src2, and has one of four values:
+;;
+;;      00:     Reserved opcode
+;;      01:     src2 is xreg (X0..X7); bit 7 must be 0
+;;      10:     src2 is ucst4 (values 0..15)
+;;      11:     src2 is ucst4, inverted (-1..-16)
+;;
+;;  S says to swap src1/src2 when mapping to op1/op2.  For some opcodes,
+;;  S=1 specifies alternate behavior / alternate opcode.  Most of these
+;;  are commutative operations, except for ANDN/ORN.
+;;
+;;   -- For ADD, S=1 negates result, giving NADD
+;;   -- For AND/ANDN/OR/XOR, S=1 inverts result, giving NAND/ORN/NOR/XNOR
+;;   -- For MPYSS/MPYUU, S selects between SS/UU
+;;   -- For DIV32, S=1 is reserved
+;;
+
+.xop.type.bad   QEQU    -1      ; unknown type
+.xop.type.reg   QEQU    0       ; R0 .. R7, SP, PC
+.xop.type.xreg  QEQU    1       ; X0 .. X7
+.xop.type.cst   QEQU    2       ; Presumed-to-be-constant expression
+
+MACRO   __parse_op(n,op)
+
+.xop.op%n%.type QSET    .xop.type.bad
+    IF __is_reg(r,%op%)
+.xop.op%n%.type QSET    .xop.type.reg
+.xop.op%n%.val  QSET    __reg_num(r,%op%)
+    ELSE
+        IF __is_reg(x,%op%)
+.xop.op%n%.type QSET    .xop.type.xreg
+.xop.op%n%.val  QSET    __reg_num(x,%op%)
+        ELSE
+        ; Assume it's of type 'cst' and hope for the best
+.xop.op%n%.type QSET    .xop.type.cst
+.xop.op%n%.val  QSET    $DEADBEEF   ; defer evaluating constant value
+        ENDI
+    ENDI
+ENDM
+
+;;  Operand => src field mappings
+;;
+;;    Operands              Mapping                             Opc[15:10]
+;;    reg,  xreg, xreg      op1 => src1, op2 => src2, S = 0     00 0 01 0
+;;    xreg, reg,  xreg      op1 => src2, op2 => src1, S = 1     00 0 01 1
+;;    reg,  cst,  xreg      op1 => src1, op2 => src2, S = 0     00 0 1x 0
+;;    cst,  reg,  xreg      op1 => src2, op2 => src1, S = 1     00 0 1x 1
+;;    xreg, xreg, xreg      op1 => src1, op2 => src2, S = 0     00 1 01 0
+;;    xreg, xreg, xreg*     op1 => src1, op2 => src2, S = 1     00 1 01 1
+;;    xreg, cst,  xreg      op1 => src1, op2 => src2, S = 0     00 1 1x 0
+;;    cst,  xreg, xreg      op1 => src2, op2 => src1, S = 1     00 1 1x 1
+;;
+;;  *This format used only by instrs that need S=1 for alternate behavior.
+;;   Explicitly disallowed for DIV32S/U.
+;;
+;;  smode = 0 means S = 0 only
+;;  smode = 1 means S = 1 only
+;;  smode = 2 means S = {0,1} allowed
+;;
+;;  sallow: allowed S values
+;;  sover:  force S value
+;;
+
+
+; s2t is encoded here; S is computed separately
+.xop.s2t.bad    QEQU    -1
+.xop.s2t.rxx    QEQU    000010b SHL 10
+.xop.s2t.xrx    QEQU    000010b SHL 10
+.xop.s2t.rkx    QEQU    000100b SHL 10
+.xop.s2t.krx    QEQU    000100b SHL 10
+.xop.s2t.xxx    QEQU    001010b SHL 10
+.xop.s2t.xkx    QEQU    001100b SHL 10
+.xop.s2t.kxx    QEQU    001100b SHL 10
+.xop.smode.bad  QEQU    -1
+.xop.smode.0    QEQU    0
+.xop.smode.1    QEQU    1
+.xop.smode.any  QEQU    2
+
+MACRO   __s1_map(s1)
+(((%s1%) + $3FF8) AND $4007)
+ENDM
+
+MACRO   __map_op_src(op1,op2,op3,sallow,sover)
+    __parse_op(1,%op1%)
+    __parse_op(2,%op2%)
+    __parse_op(3,%op3%)
+.xop.s2t        QSET    .xop.s2t.bad
+.xop.impl_s     QSET    .xop.smode.bad
+    IF (.xop.op1.type = .xop.type.reg) AND (.xop.op2.type = .xop.type.xreg)
+.xop.s2t        QSET    .xop.s2t.rxx
+.xop.impl_s     QSET    .xop.smode.0
+    ENDI
+    IF (.xop.op1.type = .xop.type.xreg) AND (.xop.op2.type = .xop.type.reg)
+.xop.s2t        QSET    .xop.s2t.xrx
+.xop.impl_s     QSET    .xop.smode.1
+    ENDI
+    IF (.xop.op1.type = .xop.type.reg) AND (.xop.op2.type = .xop.type.cst)
+.xop.s2t        QSET    .xop.s2t.rkx
+.xop.impl_s     QSET    .xop.smode.0
+    ENDI
+    IF (.xop.op1.type = .xop.type.cst) AND (.xop.op2.type = .xop.type.reg)
+.xop.s2t        QSET    .xop.s2t.krx
+.xop.impl_s     QSET    .xop.smode.1
+    ENDI
+    IF (.xop.op1.type = .xop.type.xreg) AND (.xop.op2.type = .xop.type.xreg)
+.xop.s2t        QSET    .xop.s2t.xxx
+.xop.impl_s     QSET    .xop.smode.any
+    ENDI
+    IF (.xop.op1.type = .xop.type.xreg) AND (.xop.op2.type = .xop.type.cst)
+.xop.s2t        QSET    .xop.s2t.xkx
+.xop.impl_s     QSET    .xop.smode.0
+    ENDI
+    IF (.xop.op1.type = .xop.type.cst) AND (.xop.op2.type = .xop.type.xreg)
+.xop.s2t        QSET    .xop.s2t.kxx
+.xop.impl_s     QSET    .xop.smode.1
+    ENDI
+    ; Check that we decoded a valid format / order of operands
+.xop.err        QSET    (.xop.s2t = .xop.s2t.bad)
+.xop.err        QSET    .xop.err OR (.xop.impl_s = .xop.smode.bad)
+.xop.err        QSET    .xop.err OR ((.xop.impl_s = 0) AND (%sallow% = 1))
+.xop.err        QSET    .xop.err OR ((.xop.impl_s = 1) AND (%sallow% = 0))
+.xop.err        QSET    .xop.err OR (.xop.op3.type <> .xop.type.xreg)
+    ; Resolve S mode
+.xop.smode      QSET    ((.xop.impl_s OR %sallow%) AND 1) SHL 10
+
+    IF .xop.smode = 0
+        IF .xop.op1.type = .xop.type.cst
+            ERR "Internal error: cst on src1 (S=0)"
+        ENDI
+.xop.src1       QSET    __s1_map(.xop.op1.val)          ; w1[14,2:0] 
+.xop.src2       QSET    .xop.op2.val SHL 4              ; w2[6:4] for 'xreg'
+.xop.src2.cst   QSET    .xop.op2.type = .xop.type.cst   ; is-const flag
+.xop.src2.op    QSET    2
+.xop.dst        QSET    .xop.op3.val
+    ELSE
+        IF .xop.op2.type = .xop.type.cst
+            ERR "Internal error: cst on src1 (S=1)"
+        ENDI
+.xop.src1       QSET    __s1_map(.xop.op2.val)          ; w1[14,2:0]
+.xop.src2       QSET    .xop.op1.val SHL 4              ; w2[6:4] for 'xreg'
+.xop.src2.cst   QSET    .xop.op1.type = .xop.type.cst   ; is-const flag
+.xop.src2.op    QSET    1
+.xop.dst        QSET    .xop.op3.val
+    ENDI
+
+    ; If there's an smode override, apply it after binding arguments.
+    ; The impl_s says whether to flip the operands for encoding purposes,
+    ; while sover says what to put in S to get the desired operations,
+    ; for cases where 'S' changes the effective instruction (eg. MPYSS/MPYUU)
+    ; and the underlying instruction is otherwise commutative (MPY, ADD, etc).
+    IF (%sover% <> .xop.smode.any)
+.xop.smode      QSET    ((%sover%) AND 1) SHL 10
+    ENDI
+
+    IF .xop.err
+        ERR "Invalid operands for instruction"
+    ENDI
+ENDM
+
+;; src2 field for cst
+MACRO   __cst4_lo(exp)
+((((%exp%) XOR ((-((%exp%) AND $10)) SHR 4)) AND $F) SHL 4)
+ENDM
+
+;; opcode signedness bit for src2 cst
+MACRO   __cst4_hi(exp)
+(((%exp%) AND $10) SHL (11 - 4))
+ENDM
+
+;;  Returns 1<<23 if cst4 is outside valid range.  In order for the assembler
+;;  to detect overflow in pass 2, the 1 is shifted above bit 15 so that DECLE
+;;  will throw an "expression exceeds available field width" error.
+;;
+;;  We consider a cst4 to be in valid range if it fits in these ranges:
+;;
+;;      0x00000000 .. 0x0000000F
+;;      0xFFFFFFF0 .. 0xFFFFFFFF
+;;      0x0000FFF0 .. 0x0000FFFF
+;;
+MACRO   __cst4_ov(exp)
+((((((%exp%) < $10) AND ((%exp%) > -$10)) OR (((%exp%) >= $FFF0) AND (%exp%) <= $FFFF)) = 0) SHL 23)
+ENDM
+
+MACRO   __emit_instr(op1,op2,op3,opc,sallow,sover)
+
+        __map_op_src(%op1%,%op2%,%op3%,.xop.smode.%sallow%,.xop.smode.%sover%)
+        IF .xop.src2.cst = 0
+.xop.w1     QEQU $278 OR .xop.s2t OR .xop.smode OR .xop.src1
+.xop.w2     QEQU .xop.opc.%opc% OR .xop.src2 OR .xop.dst
+            DECLE   .xop.w1, .xop.w2
+        ELSE
+.xop.w1     QEQU $278 OR .xop.s2t OR .xop.smode OR .xop.src1
+.xop.w2     QEQU .xop.opc.%opc% OR .xop.dst
+            IF .xop.src2.op = 1
+                DECLE   .xop.w1 OR __cst4_ov(%op1%) OR __cst4_hi(%op1%)
+                DECLE   .xop.w2 OR __cst4_lo(%op1%)
+            ELSE
+                DECLE   .xop.w1 OR __cst4_ov(%op2%) OR __cst4_hi(%op2%)
+                DECLE   .xop.w2 OR __cst4_lo(%op2%)
+            ENDI
+        ENDI
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  A note on data formats:                                                 ;;
+;;   -- Signed 16-bit integers go from -32768 .. 32767 ($8000 .. $7FFF)     ;;
+;;   -- Unsigned 16-bit integers go from 0 .. 65535 ($0000 .. $FFFF)        ;;
+;;   -- "Fixed point" variants swap high/low bytes to match IntyBASIC       ;;
+;; ------------------------------------------------------------------------ ;;
+
+;; ------------------------------------------------------------------------ ;;
+;;  ADD3 src1,src2,dst      dst = src1 + src2                               ;;
+;;  NADD src1,src2,dst      dst = -(src1 + src2)                            ;;
+;;  SUB3 src1,src2,dst      dst = src1 - src2                               ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   ADD3 op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,add,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   NADD op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,add,any,1)
+        LISTING "prev"
+ENDM
+
+MACRO   SUB3 op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,sub,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  ADDFX src1,src2,dst     dst = src1 + src2               (fixed-point)   ;;
+;;  NADDFX src1,src2,dst    dst = -(src1 + src2)            (fixed-point)   ;;
+;;  SUBFX src1,src2,dst     dst = src1 - src2               (fixed-point)   ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   ADDFX op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,addfx,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   NADDFX op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,addfx,any,1)
+        LISTING "prev"
+ENDM
+
+MACRO   SUBFX op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,subfx,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  AND3 src1,src2,dst      dst = src1 & src2                               ;;
+;;  NAND src1,src2,dst      dst = ~(src1 & src2)                            ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   AND3 op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,and,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   NAND op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,and,any,1)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  ANDN src1,src2,dst      dst = (~src1) & src2                            ;;
+;;  ORN src1,src2,dst       dst = (~src1) | src2                            ;;
+;;                                                                          ;;
+;;  For ANDN, src1 must be an X or R reg, and src2 must be X reg or cst.    ;;
+;;  For ORN,  src1 must be an X or cst,   and src2 must be X reg or R reg.  ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   ANDN op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,andn,0,0)
+        LISTING "prev"
+ENDM
+
+MACRO   ORN3 op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,andn,1,1)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  OR3 src1,src2,dst       dst = src1 | src2                               ;;
+;;  NOR src1,src2,dst       dst = ~(src1 | src2)                            ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   OR3 op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,or,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   NOR op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,or,any,1)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  XOR3 src1,src2,dst      dst = src1 ^ src2                               ;;
+;;  XNOR src1,src2,dst      dst = ~(src1 ^ src2)                            ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   XOR3 op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,xor,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   XNOR op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,xor,any,1)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  SHL3 src1,src2,dst      dst_lo = src1 << src2                           ;;
+;;                          dst_hi = src1 >> (16 - src2)  signed            ;;
+;;                                                                          ;;
+;;  SHLU3 src1,src2,dst     dst_lo = src1 << src2                           ;;
+;;                          dst_hi = src1 >> (16 - src2)  unsigned          ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   SHL3 op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,shl,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   SHLU3 op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,shlu,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  SHR3 src1,src2,dst      dst_lo = src1 >> src2         signed            ;;
+;;                          dst_hi = src1 << (16 - src2)                    ;;
+;;                                                                          ;;
+;;  SHRU3 src1,src2,dst     dst_lo = src1 >> src2         unsigned          ;;
+;;                          dst_hi = src1 << (16 - src2)                    ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   SHR3 op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,shr,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   SHRU3 op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,shru,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  BSHLU src1,src2,dst     dst_lo = (src1 << src2), byte-masked            ;;
+;;                          dst_hi = (src1 >> (8 - src2)), byte-masked      ;;
+;;                                                                          ;;
+;;  src1 is treated as a pair of bytes shifted by 0 to 8 positions, with    ;;
+;;  zeros filling the shifted-in bits.  This is useful for shifting packed  ;;
+;;  graphics within 16-bit words.  Shift amount must be 0..8.               ;;
+;;                                                                          ;;
+;;  For example, shifting $FFFF left by 3 gives $0707:$F8F8.                ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   BSHLU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,bshlu,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  BSHRU src1,src2,dst     dst_lo = (src1 >> src2), byte-masked            ;;
+;;                          dst_hi = (src1 << (8 - src2)), byte-masked      ;;
+;;                                                                          ;;
+;;  src1 is treated as a pair of bytes shifted by 0 to 8 positions, with    ;;
+;;  zeros filling the shifted-in bits.  This is useful for shifting packed  ;;
+;;  graphics within 16-bit words.  Shift amount must be 0..8.               ;;
+;;                                                                          ;;
+;;  For example, shifting $FFFF right by 3 gives $E0E0:$1F1F.               ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   BSHRU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,bshru,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  ROL src1,src2,dst       dst = (src1 << src2) | (src1 >> (16 - src2))    ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   ROL op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,rol,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  ROR src1,src2,dst       dst = (src1 >> src2) | (src1 << (16 - src2))    ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   ROR op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,ror,any,any)
+        LISTING "prev"
+ENDM
+
+
+;; ------------------------------------------------------------------------ ;;
+;;  BITCNTL src1,src2,dst   dst = bitcnt( msbs of src1 )                    ;;
+;;  BITCNTR src1,src2,dst   dst = bitcnt( lsbs of src1 )                    ;;
+;;  BITCNT  src1,dst        dst = bitcnt( src1 )                            ;;
+;;                                                                          ;;
+;;  Count number of 1 bits in the src2+1 MSBs (BITCNTL) or LSBs (BITCNTR)   ;;
+;;  of src1.  L and R stand for "left" and "right".                         ;;
+;;                                                                          ;;
+;;  BITCNT is an alias that operates on the whole word.                     ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   BITCNTL op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,bitcntl,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   BITCNTR op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,bitcntr,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   BITCNT op1,op3
+        LISTING "code"
+        __emit_instr(%op1%,0,%op3%,bitcntl,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  BITREVL src1,src2,dst   dst = bitrev( src1 ) << (16 - src2)             ;;
+;;  BITREVR src1,src2,dst   dst = bitrev( src1 ) >> (16 - src2)             ;;
+;;  BITREV  src1,dst        dst = bitrev( src1 )                            ;;
+;;                                                                          ;;
+;;  Bit-reverse the src2+1 MSBs (BITREVL) or LSBs (BITREVR) of src1, and    ;;
+;;  zero remaining bits.  L and R stand for "left" and "right".             ;;
+;;                                                                          ;;
+;;  BITREV is an alias that operates on the whole word.                     ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   BITREVL op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,bitrevl,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   BITREVR op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,bitrevr,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   BITREV op1,op3
+        LISTING "code"
+        __emit_instr(%op1%,0,%op3%,bitrevl,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  LMO src1,src2,dst       dst = leftmost one in src1 at/below bit #src2   ;;
+;;  LMZ src1,src2,dst       dst = leftmost zero in src1 at/below bit #src2  ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   LMO op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,lmo,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   LMZ op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,lmz,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  RMO src1,src2,dst       dst = rightmost one in src1 at/above bit #src2  ;;
+;;  RMZ src1,src2,dst       dst = rightmost zero in src1 at/above bit #src2 ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   RMO op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,rmo,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   RMZ op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,rmz,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  REPACK src1,src2,dst    dst_lo = ((src1 << 8) & $FF00) | (src2 & $FF)   ;;
+;;                          dst_hi = (src1 & $FF00) | ((src2 >> 8) & $FF)   ;;
+;;                                                                          ;;
+;;  Packs the LSBs of src1 and src2 into dst_lo.                            ;;
+;;  Packs the MSBs of src1 and src2 into dst_hi.                            ;;
+;;                                                                          ;;
+;;  Use w/ a constant for src1 or src2 to unpack a 16-bit value into MSBs   ;;
+;;  or LSBs of two registers.                                               ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   REPACK op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,repack,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  PACKL src1,src2,dst     dst = ((src1 << 8) & $FF00) | (src2 & $FF)      ;;
+;;                                                                          ;;
+;;  Packs the LSBs of src1 and src2 into dst.                               ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   PACKL op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,packl,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  PACKH src1,src2,dst     dst = (src1 & $FF00) | ((src2 >> 8) & $FF)      ;;
+;;                                                                          ;;
+;;  Packs the MSBs of src1 and src2 into dst.                               ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   PACKH op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,packh,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  PACKLH src1,src2,dst    dst = (src1 << 8) | (src2 >> 8)                 ;;
+;;                                                                          ;;
+;;  Packs the LSB of src1 and MSB of src2 into dst.                         ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   PACKLH op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,packh,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  BTOG src1,src2,dst      dst = src1 ^ (1 << src2)                        ;;
+;;  BSET src1,src2,dst      dst = src1 | (1 << src2)                        ;;
+;;  BCLR src1,src2,dst      dst = src1 & ~(1 << src2)                       ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   BTOG op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,btog,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   BSET op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,bset,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   BCLR op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,bclr,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  CMPLTU  src1,src2,dst   dst  = src1 <  src2 ? -1 : 0  (unsigned)        ;;
+;;  CMPLEU  src1,src2,dst   dst  = src1 <= src2 ? -1 : 0  (unsigned)        ;;
+;;  CMPGTU  src1,src2,dst   dst  = src1 >  src2 ? -1 : 0  (unsigned)        ;;
+;;  CMPGEU  src1,src2,dst   dst  = src1 >= src2 ? -1 : 0  (unsigned)        ;;
+;;  CMPLTU& src1,src2,dst   dst &= src1 <  src2 ? -1 : 0  (unsigned)        ;;
+;;  CMPLEU& src1,src2,dst   dst &= src1 <= src2 ? -1 : 0  (unsigned)        ;;
+;;  CMPGTU& src1,src2,dst   dst &= src1 >  src2 ? -1 : 0  (unsigned)        ;;
+;;  CMPGEU& src1,src2,dst   dst &= src1 >= src2 ? -1 : 0  (unsigned)        ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   CMPLTU src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmpltu,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPLEU src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmpleu,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPGTU src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op2%,%op1%,%op3%,cmpltu,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPGEU src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op2%,%op1%,%op3%,cmpleu,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPLTU& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmpltua,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPLEU& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmpleua,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPGTU& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op2%,%op1%,%op3%,cmpltua,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPGEU& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op2%,%op1%,%op3%,cmpleua,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  CMPLTFXU  src1,src2,dst  dst  = src1 <  src2 ? -1 : 0  (fixed-pt uns.)  ;;
+;;  CMPLEFXU  src1,src2,dst  dst  = src1 <= src2 ? -1 : 0  (fixed-pt uns.)  ;;
+;;  CMPGTFXU  src1,src2,dst  dst  = src1 >  src2 ? -1 : 0  (fixed-pt uns.)  ;;
+;;  CMPGEFXU  src1,src2,dst  dst  = src1 >= src2 ? -1 : 0  (fixed-pt uns.)  ;;
+;;  CMPLTFXU& src1,src2,dst  dst &= src1 <  src2 ? -1 : 0  (fixed-pt uns.)  ;;
+;;  CMPLEFXU& src1,src2,dst  dst &= src1 <= src2 ? -1 : 0  (fixed-pt uns.)  ;;
+;;  CMPGTFXU& src1,src2,dst  dst &= src1 >  src2 ? -1 : 0  (fixed-pt uns.)  ;;
+;;  CMPGEFXU& src1,src2,dst  dst &= src1 >= src2 ? -1 : 0  (fixed-pt uns.)  ;;
+;;                                                                          ;;
+;;  Performs comparison in 'swapped 8.8 fixed-point' format.                ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   CMPLTFXU src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmpltfxu,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPLEFXU src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmplefxu,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPGTFXU src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op2%,%op1%,%op3%,cmpltfxu,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPGEFXU src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op2%,%op1%,%op3%,cmplefxu,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPLTFXU& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmpltfxua,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPLEFXU& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmplefxua,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPGTFXU& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op2%,%op1%,%op3%,cmpltfxua,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPGEFXU& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op2%,%op1%,%op3%,cmplefxua,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  CMPLT  src1,src2,dst    dst  = src1 <  src2 ? -1 : 0  (signed)          ;;
+;;  CMPLE  src1,src2,dst    dst  = src1 <= src2 ? -1 : 0  (signed)          ;;
+;;  CMPGT  src1,src2,dst    dst  = src1 >  src2 ? -1 : 0  (signed)          ;;
+;;  CMPGE  src1,src2,dst    dst  = src1 >= src2 ? -1 : 0  (signed)          ;;
+;;  CMPLT& src1,src2,dst    dst &= src1 <  src2 ? -1 : 0  (signed)          ;;
+;;  CMPLE& src1,src2,dst    dst &= src1 <= src2 ? -1 : 0  (signed)          ;;
+;;  CMPGT& src1,src2,dst    dst &= src1 >  src2 ? -1 : 0  (signed)          ;;
+;;  CMPGE& src1,src2,dst    dst &= src1 >= src2 ? -1 : 0  (signed)          ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   CMPLT src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmplt,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPLE src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmple,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPGT src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op2%,%op1%,%op3%,cmplt,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPGE src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op2%,%op1%,%op3%,cmple,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPLT& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmplta,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPLE& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmplea,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPGT& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op2%,%op1%,%op3%,cmplta,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPGE& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op2%,%op1%,%op3%,cmplea,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  CMPLTFX  src1,src2,dst  dst  = src1 <  src2 ? -1 : 0 (fixed-pt signed)  ;;
+;;  CMPLEFX  src1,src2,dst  dst  = src1 <= src2 ? -1 : 0 (fixed-pt signed)  ;;
+;;  CMPGTFX  src1,src2,dst  dst  = src1 >  src2 ? -1 : 0 (fixed-pt signed)  ;;
+;;  CMPGEFX  src1,src2,dst  dst  = src1 >= src2 ? -1 : 0 (fixed-pt signed)  ;;
+;;  CMPLTFX& src1,src2,dst  dst &= src1 <  src2 ? -1 : 0 (fixed-pt signed)  ;;
+;;  CMPLEFX& src1,src2,dst  dst &= src1 <= src2 ? -1 : 0 (fixed-pt signed)  ;;
+;;  CMPGTFX& src1,src2,dst  dst &= src1 >  src2 ? -1 : 0 (fixed-pt signed)  ;;
+;;  CMPGEFX& src1,src2,dst  dst &= src1 >= src2 ? -1 : 0 (fixed-pt signed)  ;;
+;;                                                                          ;;
+;;  Performs comparison in 'swapped 8.8 fixed-point' format.                ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   CMPLTFX src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmpltfx,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPLEFX src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmplefx,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPGTFX src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op2%,%op1%,%op3%,cmpltfx,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPGEFX src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op2%,%op1%,%op3%,cmplefx,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPLTFX& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmpltfxa,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPLEFX& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmplefxa,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPGTFX& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op2%,%op1%,%op3%,cmpltfxa,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPGEFX& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op2%,%op1%,%op3%,cmplefxa,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  CMPEQ  src1,src2,dst    dst  = src1 == src2 ? -1 : 0                    ;;
+;;  CMPNE  src1,src2,dst    dst  = src1 != src2 ? -1 : 0                    ;;
+;;  CMPEQ& src1,src2,dst    dst &= src1 == src2 ? -1 : 0                    ;;
+;;  CMPNE& src1,src2,dst    dst &= src1 != src2 ? -1 : 0                    ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   CMPEQ src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmpeq,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPNE src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmpeq,any,1)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPEQ& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmpeqa,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   CMPNE& src1,src2,dst
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,cmpeqa,any,1)
+        LISTING "prev"
+ENDM
+
+
+;; ------------------------------------------------------------------------ ;;
+;;  MIN  src1,src2,dst      dst = src1 < src2 ? src1 : src2  (signed)       ;;
+;;  MINU src1,src2,dst      dst = src1 < src2 ? src1 : src2  (unsigned)     ;;
+;;  MAX  src1,src2,dst      dst = src1 > src2 ? src1 : src2  (signed)       ;;
+;;  MAXU src1,src2,dst      dst = src1 > src2 ? src1 : src2  (unsigned)     ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   MIN op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,min,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   MINU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,minu,any,1)
+        LISTING "prev"
+ENDM
+
+MACRO   MAX op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,max,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   MAXU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,maxu,any,1)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  MINFX  src1,src2,dst    dst = src1 < src2 ? src1 : src2  (signed)       ;;
+;;  MINFXU src1,src2,dst    dst = src1 < src2 ? src1 : src2  (unsigned)     ;;
+;;  MAXFX  src1,src2,dst    dst = src1 > src2 ? src1 : src2  (signed)       ;;
+;;  MAXFXU src1,src2,dst    dst = src1 > src2 ? src1 : src2  (unsigned)     ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   MINFX op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,minfx,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   MINFXU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,minfxu,any,1)
+        LISTING "prev"
+ENDM
+
+MACRO   MAXFX op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,maxfx,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   MAXFXU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,maxfxu,any,1)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  BOUND    src1, src2, dst    dst = bound(src1, src2, dst)      (signed)  ;;
+;;  BOUNDU   src1, src2, dst    dst = bound(src1, src2, dst)    (unsigned)  ;;
+;;  BOUNDFX  src1, src2, dst    dst = bound(src1, src2, dst)  (fx-pt sgn.)  ;;
+;;  BOUNDFXU src1, src2, dst    dst = bound(src1, src2, dst)  (fx-pt uns.)  ;;
+;;                                                                          ;;
+;;  Bounds the value already in 'dst' to be within the range src1..src2.    ;;
+;;  Specifically:                                                           ;;
+;;                                                                          ;;
+;;                  min(src1,src2) <= dst <= max(src1,src2)                 ;;
+;;                                                                          ;;
+;;  If dst is initially outside that range, it will be clamped to the       ;;
+;;  appropriate bound.                                                      ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   BOUND op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,bound,any,0)
+        LISTING "prev"
+ENDM
+    
+MACRO   BOUNDU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,bound,any,1)
+        LISTING "prev"
+ENDM
+    
+MACRO   BOUNDFX op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,boundfx,any,0)
+        LISTING "prev"
+ENDM
+    
+MACRO   BOUNDFXU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,boundfx,any,1)
+        LISTING "prev"
+ENDM
+    
+;; ------------------------------------------------------------------------ ;;
+;;  ADDCIRC src1,src2,dst   dst[src2-1:0] = dst[src2-1:0] + src1            ;;
+;;                          dst[15:src2]  = dst[15:src2]                    ;;
+;;                                                                          ;;
+;;  Circular ADD adds src1 to dst, updating only the src2 LSBs of dst.      ;;
+;;  Useful for power-of-2 sized circular queues.                            ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   ADDCIRC op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,addcirc,any,any)
+        LISTING "prev"
+ENDM
+    
+;; ------------------------------------------------------------------------ ;;
+;;  SUBCIRC src1,src2,dst   dst[src2-1:0] = dst[src2-1:0] - src1            ;;
+;;                          dst[15:src2]  = dst[15:src2]                    ;;
+;;                                                                          ;;
+;;  Circular SUB subtracts src1 from dst, updating only the src2 LSBs of    ;;
+;;  dst.  Useful for power-of-2 sized circular queues.                      ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   SUBCIRC op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,subcirc,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  ATAN2                   dst = direction_of(src1, src2)        (signed)  ;;
+;;  ATAN2FX                 dst = direction_of(src1, src2)  (signed fx-pt)  ;;
+;;                                                                          ;;
+;;  Returns the direction pointed by the vector <src1,src2>.  This is       ;;
+;;  approximately equivalent to the C library function atan2(); however,    ;;
+;;  instead of returning a value in the range [0, 2*PI], this returns a     ;;
+;;  value in the range 0..15, starting counter clockwise the origin as      ;;
+;;  follows:                                                                ;;
+;;                                                                          ;;
+;;                                     4                                    ;;
+;;                               5     ^     3                              ;;
+;;                                     |+y                                  ;;
+;;                           6         |         2                          ;;
+;;                              \      |      /                             ;;
+;;                       7        \    |    /       1                       ;;
+;;                                  \  |  /                                 ;;
+;;                                    \|/                                   ;;
+;;                      8 <------------+-----------> 0                      ;;
+;;                         -x         /|\        +x                         ;;
+;;                                  /  |  \                                 ;;
+;;                        9       /    |    \      15                       ;;
+;;                              /      |      \                             ;;
+;;                          10         |-y      14                          ;;
+;;                               11    V   13                               ;;
+;;                                    12                                    ;;
+;;                                                                          ;;
+;;  This can be useful for computing the direction something is from the    ;;
+;;  one's current position.                                                 ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   ATAN2 op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,atan2,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   ATAN2FX op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,atan2fx,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  SUBABS  src1,src2,dst   dst = abs( src1 - src2 )              (signed)  ;;
+;;  SUBABSU src1,src2,dst   dst = abs( src1 - src2 )            (unsigned)  ;;
+;;                                                                          ;;
+;;  The output of both forms is unsigned.  The difference between the two   ;;
+;;  is whether the original inputs are signed or unsigned.                  ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   SUBABS op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,subabs,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   SUBABSU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,subabsu,any,1)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  SUBABSFX src1,src2,dst  dst = abs( src1 - src2 )   (signed fixed-pt)    ;;
+;;  SUBABSFXU src1,src2,dst dst = abs( src1 - src2 )   (unsigned fixed-pt)  ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   SUBABSFX op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,subabsfx,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   SUBABSFXU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,subabsfxu,any,1)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  DIST    src1,src2,dst   dst = (123 * maxu(abs(src1),abs(src2)) +        ;;
+;;                                  51 * minu(abs(src1),abs(src2)) ) >> 7   ;;
+;;  DISTU   src1,src2,dst   dst = (123 * maxu(src1,src2) +                  ;;
+;;                                  51 * minu(src1,src2) ) >> 7             ;;
+;;  DISTFX  src1,src2,dst   dst = (123 * maxu(abs(src1),abs(src2)) +        ;;
+;;                                  51 * minu(abs(src1),abs(src2)) ) >> 7   ;;
+;;  DISTFXU src1,src2,dst   dst = (123 * maxu(src1,src2) +                  ;;
+;;                                  51 * minu(src1,src2) ) >> 7             ;;
+;;                                                                          ;;
+;;  DIST/DISTU work w/ 16-bit integers                                      ;;
+;;  DISTFX/DISTFXU work w/ 8.8 rotated fixed-point integers                 ;;
+;;  DIST/DISTFX work with signed inputs                                     ;;
+;;  DISTU/DISTFXU work with unsigned inputs                                 ;;
+;;                                                                          ;;
+;;  This is the 'veclen2' aka 'dist_fast' Euclidean distance estimate from  ;;
+;;  Graphics Gems.  Accurate to within 4%.  Output is always unsigned.      ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   DIST op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,dist,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   DISTU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,dist,any,1)
+        LISTING "prev"
+ENDM
+
+MACRO   DISTFX op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,distfx,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   DISTFXU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,distfx,any,1)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  SUMSQ    src1,src2,dst   dst_hi:lo = src1*src1 + src2*src2    (signed)  ;;
+;;  SUMSQU   src1,src2,dst   dst_hi:lo = src1*src1 + src2*src2  (unsigned)  ;;
+;;  SUMSQFX  src1,src2,dst   dst_hi:lo = src1*src1 + src2*src2 (fx-pt sgn)  ;;
+;;  SUMSQFXU src1,src2,dst   dst_hi:lo = src1*src1 + src2*src2 (Fx-pt uns)  ;;
+;;                                                                          ;;
+;;  Returns the sum of the squares of the inputs as a 32-bit output.  If    ;;
+;;  the sum overflows, the result is clamped to $FFFF:FFFF.                 ;;
+;;                                                                          ;;
+;;  For SUMSQFX/SUMSQFXU, the inputs are 8.8 rotated fixed-point; however,  ;;
+;;  the ouptut is not rotated.  dst_hi has the upper 16 bits, which         ;;
+;;  corresponds to the integer portion of the result.  dst_lo has the lower ;;
+;;  16 bits, which corresponds to the fraction portion.                     ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   SUMSQ op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,sumsq,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   SUMSQU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,sumsqu,any,1)
+        LISTING "prev"
+ENDM
+
+MACRO   SUMSQFX op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,sumsqfx,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   SUMSQFXU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,sumsqfxu,any,1)
+        LISTING "prev"
+ENDM
+
+
+;; ------------------------------------------------------------------------ ;;
+;;  MPYSS src1,src2,dst     dst_hi:lo = src1 * src2  (  signed x   signed)  ;;
+;;  MPYSU src1,src2,dst     dst_hi:lo = src1 * src2  (  signed x unsigned)  ;;
+;;  MPYUS src1,src2,dst     dst_hi:lo = src1 * src2  (unsigned x   signed)  ;;
+;;  MPYUU src1,src2,dst     dst_hi:lo = src1 * src2  (unsigned x unsigned)  ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   MPYSS op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,mpyss,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   MPYUU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,mpyss,any,1)
+        LISTING "prev"
+ENDM
+
+MACRO   MPYSU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,mpysu,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   MPYUS op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,mpyus,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  MPYFXSS src1,src2,dst   dst_hi:lo = src1 * src2  (  signed x   signed)  ;;
+;;  MPYFXSU src1,src2,dst   dst_hi:lo = src1 * src2  (  signed x unsigned)  ;;
+;;  MPYFXUS src1,src2,dst   dst_hi:lo = src1 * src2  (unsigned x   signed)  ;;
+;;  MPYFXUU src1,src2,dst   dst_hi:lo = src1 * src2  (unsigned x unsigned)  ;;
+;;                                                                          ;;
+;;  Fixed point variants, using rotated 8.8 representation.                 ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   MPYFXSS op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,mpyfxss,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   MPYFXUU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,mpyfxss,any,1)
+        LISTING "prev"
+ENDM
+
+MACRO   MPYFXSU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,mpyfxsu,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   MPYFXUS op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,mpyfxus,any,any)
+        LISTING "prev"
+ENDM
+
+
+;; ------------------------------------------------------------------------ ;;
+;;  MPY16 src1,src2,dst     dst = src1 * src2        (signed or unsigned)   ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   MPY16 op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,mpy16,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  ISQRT src1,dst          dst = isqrt(src1)                  (unsigned)   ;;
+;;  ISQRTFX src1,dst        dst = isqrt(src1 << 8)             (fixed-pt)   ;;
+;;                                                                          ;;
+;;  Integer square root:  Returns the largest number whose square is less   ;;
+;;  than or equal to the input.                                             ;;
+;;                                                                          ;;
+;;  The fixed point version uses the integer square root logic to perform   ;;
+;;  a fixed point square root.  The input is rotated 8.8 fixed point, as    ;;
+;;  is the output, with a full 8 bits of fraction (12 significant output    ;;
+;;  bits).                                                                  ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   ISQRT op1,op2
+        LISTING "code"
+        __emit_instr(%op1%,0,%op2%,isqrt,any,0)
+        LISTING "prev"
+ENDM
+
+MACRO   ISQRTFX op1,op2
+        LISTING "code"
+        __emit_instr(%op1%,0,%op2%,isqrt,any,1)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  AAL src1,src2,dst       dst = ascii_adjust(src1 & 0xFF, src2)           ;;
+;;  AAH src1,src2,dst       dst = ascii_adjust((src1 >> 8) & 0xFF, src2)    ;;
+;;                                                                          ;;
+;;  ASCII Adjust Lo (AAL) extracts the lower byte of a packed string and    ;;
+;;  adjusts it for display on on the STIC by formatting it for BACKTAB.     ;;
+;;                                                                          ;;
+;;  ASCII Adjust Hi (AAH) extracts the upper byte of a packed string and    ;;
+;;  adjusts it for display on on the STIC by formatting it for BACKTAB.     ;;
+;;                                                                          ;;
+;;  The exact computation for AAL:                                          ;;
+;;                                                                          ;;
+;;      card   = ((src1 & 0xFF) - 0x20) & 0x1FF                             ;;
+;;      result = (card << 3) + src2                                         ;;
+;;                                                                          ;;
+;;  This maps values in the range $20 - $FF to GROM characters $00 - $DF,   ;;
+;;  and values in the range $00 - $1F to GRAM characters $20 - $3F.         ;;
+;;                                                                          ;;
+;;  The computation for AAH is similar, only it examines the upper 8 bits   ;;
+;;  of src1, rather than the lower.                                         ;;
+;;                                                                          ;;
+;;  The value on src2 acts as a "format word":  It can provide an offset    ;;
+;;  for indexing a font, and/or color information.                          ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   AAL op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,aal,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   AAH op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,aah,any,any)
+        LISTING "prev"
+ENDM
+
+
+;; ------------------------------------------------------------------------ ;;
+;;  DIVS src1,src2,dst      dst_lo = src1 / src2  (signed)                  ;;
+;;                          dst_hi = src1 % src2  (signed)                  ;;
+;;                                                                          ;;
+;;  DIVU src1,src2,dst      dst_lo = src1 / src2  (unsigned)                ;;
+;;                          dst_hi = src1 % src2  (unsigned)                ;;
+;;                                                                          ;;
+;;  On divide-by-0, dst_hi = dst_lo = $7FFF (signed) or $FFFF (unsigned).   ;;
+;;                                                                          ;;
+;;  The only overflow case is for signed divide: $8000 / $FFFF. It returns  ;;
+;;  $8000 / $0000.                                                          ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   DIVS op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,divs,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   DIVU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,divu,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  DIVFXS src1,src2,dst    dst_lo = src1 / src2  (signed)                  ;;
+;;                          dst_hi = src1 % src2  (signed)                  ;;
+;;                                                                          ;;
+;;  DIVFXU src1,src2,dst    dst_lo = src1 / src2  (unsigned)                ;;
+;;                          dst_hi = src1 % src2  (unsigned)                ;;
+;;                                                                          ;;
+;;  Inputs and output are fixed-point rotated 8.8 representation.           ;;
+;;                                                                          ;;
+;;  On overflow or divide-by-0, dst_hi = dst_lo = $FF7F (signed) or         ;;
+;;  $FFFF (unsigned).                                                       ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   DIVFXS op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,divfxs,any,any)
+        LISTING "prev"
+ENDM
+
+MACRO   DIVFXU op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,divfxu,any,any)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  DIV32S src1,src2,dst    dst_lo = src1_hi:src1_lo / src2  (signed)       ;;
+;;                          dst_hi = src1_hi:src1_lo % src2  (signed)       ;;
+;;                                                                          ;;
+;;  DIV32U src1,src2,dst    dst_lo = src1_hi:src1_lo / src2  (unsigned)     ;;
+;;                          dst_hi = src1_hi:src1_lo % src2  (unsigned)     ;;
+;;                                                                          ;;
+;;  If src1 is an X register, then src1_hi = src1+1, src1_lo = src1.        ;;
+;;  If src1 is an R register, then src1_hi = src1,   src1_lo = $0000.       ;;
+;;  src1 must be an X or R register.                                        ;;
+;;                                                                          ;;
+;;  On overflow or divide-by-0, dst_hi = dst_lo = $7FFF (signed) or         ;;
+;;  $FFFF (unsigned).                                                       ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   DIV32S op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,div32s,0,0)
+        LISTING "prev"
+ENDM
+
+MACRO   DIV32U op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,div32u,0,0)
+        LISTING "prev"
+ENDM
+
+;; ------------------------------------------------------------------------ ;;
+;;  TSTBNZ  Xreg, label     Test and branch if non-zero                     ;;
+;;  DECBNZ  Xreg, label     Decrement and branch if non-zero                ;;
+;;                                                                          ;;
+;;  Xreg must be X1..X7.  Label can be any address in address space.        ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   __emit_bnz(xr,label,opcode)
+
+.xop.src1   QEQU    -1
+    IF __is_reg_x(%xr%)
+.xop.src1   QEQU    __reg_num(x,%xr%)
+        IF .xop.src1 >= 1 AND .xop.src1 <= 7
+            DECLE   (%opcode%) OR (.xop.src1 SHL 10), ((%label%) - $)
+        ELSE
+.xop.src1   QEQU    -1
+        ENDI
+    ENDI
+    IF .xop.src1 = -1
+        EMSG    "First operand must be a register X1 through X7."
+    ENDI
+ENDM
+
+MACRO   TSTBNZ xr,label
+        LISTING "code"
+        __emit_bnz(%xr%,%label%,$287)
+        LISTING "prev"
+ENDM
+
+MACRO   DECBNZ xr,label
+        LISTING "code"
+        __emit_bnz(%xr%,%label%,$3C7)
+        LISTING "prev"
+ENDM
+
+
+;; ------------------------------------------------------------------------ ;;
+;;  TXSER   Xreg, nodata, error     Transmit serial                         ;;
+;;  RXSER   Xreg, nodata, error     Receive serial                          ;;
+;;                                                                          ;;
+;;  Xreg must be X1..X7.                                                    ;;
+;;                                                                          ;;
+;;  Falls through to next instruction if send/recv succeeds.                ;;
+;;  Branches to nodata if unable to send/recv.                              ;;
+;;  Branches to error if an error is detected; Writes error flags to Xreg.  ;;
+;;  The error/nodata labels must be within -64/+63 of next instr.           ;;
+;; ------------------------------------------------------------------------ ;;
+MACRO   __emit_ser(xr,nodata,error,txrx)
+
+.xop.src1   QEQU    -1
+    IF __is_reg_x(%xr%)
+.xop.src1   QEQU    __reg_num(x,%xr%)
+        IF .xop.src1 >= 1 AND .xop.src1 <= 7
+            DECLE   $2C7 OR (.xop.src1 SHL 10)
+            DECLE   (((((%error%) - $ - 1) SHL 9)) OR ((((%nodata%) - $ - 1) AND $7F) SHL 1) OR (%txrx%)) XOR (((((%error%) - $ + 63) AND $80) SHL 19) OR ((((%nodata%) - $ + 63) AND $80) SHL 17))
+        ELSE
+.xop.src1   QEQU    -1
+        ENDI
+    ENDI
+    IF .xop.src1 = -1
+        EMSG    "First operand must be a register X1 through X7."
+    ENDI
+ENDM
+
+MACRO   RXSER  xr,nodata,error
+;       LISTING "code"
+        __emit_ser(%xr%,%nodata%,%error%,0)
+;       LISTING "prev"
+ENDM
+MACRO   TXSER  xr,nodata,error
+;       LISTING "code"
+        __emit_ser(%xr%,%nodata%,%error%,1)
+;       LISTING "prev"
+ENDM
+
+        LISTING "prev"
+    ENDI
+
+
+
+;; Read an internal location at src1 + src2
+MACRO   READINT op1,op2,op3
+        LISTING "code"
+        __emit_instr(%op1%,%op2%,%op3%,readint,any,any)
+        LISTING "prev"
+ENDM
