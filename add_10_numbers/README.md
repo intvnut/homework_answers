@@ -3,7 +3,7 @@
 Like so many other assembly language questions, I played _Dealer's Choice._
 
 This time, I picked
-[CP-1600X](../pdf/Locutus_CP-1600X_Instruction_Set_Extensions_20191203a.pdf),
+[CP-1600X](../PDFs/Locutus_CP-1600X_Instruction_Set_Extensions_20191203a.pdf),
 which is an extended instruction set I created for the already obscure CP-1600
 architecture.  This instruction set isn't just an "on paper" design.  I
 actually implemented it, such that you can execute these new instructions on
