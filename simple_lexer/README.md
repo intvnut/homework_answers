@@ -1,7 +1,7 @@
 # C: Simple Lexer Which Only Lexes `move X, 1`
 
 This person wants to match exactly one thing.  So... that's _all_ this will
-match.  Nothing more, nothing less.  Brittle?  Yes, ss specified!
+match.  Nothing more, nothing less.  Brittle?  Yes, as brittle as specified!
 
 Original: [How could I implement a simple lexer in C which only lexes "move X, 1"?](https://www.quora.com/How-could-I-implement-a-simple-lexer-in-C-which-only-lexes-move-X-1/answer/Joe-Zbiciak)
 
