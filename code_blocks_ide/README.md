@@ -5,7 +5,7 @@ misinterpreting IDE.  I've reproduced the original post below the cut.
 
 Original: [Why is CodeBlocks called IDE?](https://www.quora.com/Why-is-CodeBlocks-called-IDE/answer/Joe-Zbiciak)
 
-__
+---
 
 Originally it was called Code::Blocks [MFM.](https://en.wikipedia.org/wiki/Modified_frequency_modulation) It was big and clunky.  
 
@@ -46,7 +46,7 @@ And Code::Blocks [NVMe:](https://en.wikipedia.org/wiki/NVM_Express)
 
 ![Code::Blocks NVMe](../Images/code_blocks_ide_07.jpeg)
 
-__
+---
 
 _Wait a minute… what’s that?_
 
@@ -56,7 +56,8 @@ _Are you saying I got the wrong IDE? … Really?! … Uh huh. … Ok … And tha
 Code::Blocks isn’t a block storage device. …. Mmm hmm … Ok … Not that kind of
 blocks. … Uh huh … Ok … Got it._
 
-__
+---
+
 Sorry about that folks.  
 
 [Code::Blocks](https://en.wikipedia.org/wiki/Code::Blocks) is an
@@ -69,7 +70,8 @@ It’s integrated, in the sense that it has a front-end that includes an editor,
 GUI designer, debugger,\* and custom build system (and Make support) that will
 launch the compiler for you, all from within that front end.
 
-__
+---
+
 \*_Addendum:_ Actually it just invokes an external debugger as Jerry Coffin
 [mentions](https://www.quora.com/Why-is-CodeBlocks-called-IDE/answer/Joe-Zbiciak?comment_id=163019652&comment_type=2)
 in the comments on the original answer.
