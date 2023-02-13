@@ -5,7 +5,7 @@ trolling answer to a programming question.  I actually offered a mega-fun-pack
 of potential solutions.
 
 Since all of them are short, I will just include them here.  That said, I
-recommend you visit [the original answer[(https://www.quora.com/What-is-the-C++-code-for-this-question-without-an-if-else-condition-If-input-13-the-answer-will-be-39-and-if-input-39-the-answer-will-be-13/answer/Joe-Zbiciak)
+recommend you visit [the original answer](https://www.quora.com/What-is-the-C++-code-for-this-question-without-an-if-else-condition-If-input-13-the-answer-will-be-39-and-if-input-39-the-answer-will-be-13/answer/Joe-Zbiciak)
 because I include a great war story and lesson at the end of it.
 
 ## What is the C++ code for this question without an if/else condition, "If input 13 the answer will be 39 and if input 39 the answer will be 13"?
