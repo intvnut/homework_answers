@@ -18,7 +18,7 @@ And as Jerry Coffin put it:
 
 Spot on!
 
-Original: [https://www.quora.com/What-is-a-c-recursive-function-that-counts-the-occurrence-of-a-given-character-in-a-given-word/answer/Joe-Zbiciak](https://www.quora.com/What-is-a-c-recursive-function-that-counts-the-occurrence-of-a-given-character-in-a-given-word)
+Original: [What is a c++ recursive function that counts the occurrence of a given character in a given word?](https://www.quora.com/What-is-a-c-recursive-function-that-counts-the-occurrence-of-a-given-character-in-a-given-word)
 
 
 ____
