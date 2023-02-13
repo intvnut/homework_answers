@@ -1035,6 +1035,8 @@ The details of the question didn't really matter to my answer.
 130 DATA 32, 104, 111, 109, 101, 119, 111, 114, 107, 33, 13, 10 
 ```
 
+If you guessed that prints `Do your own homework!`, collect your prize.
+
 Original: [How do I write an algorithm (simple for GW-BASIC) that takes five numbers as input from the user using only 1 variable, calculates and displays their sum, average, and the sum of even numbers (without using a loop)?](https://www.quora.com/How-do-I-write-an-algorithm-simple-for-GW-BASIC-that-takes-five-numbers-as-input-from-the-user-using-only-1-variable-calculates-and-displays-their-sum-average-and-the-sum-of-even-numbers-without-using-a-loop/answer/Joe-Zbiciak)
 
 ## C++: Average of First 10 Integers
