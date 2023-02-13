@@ -32,7 +32,7 @@ And here's some nice screen shots of the code in action:
 
 And if you're wondering about the 'ggg!' terminator on the last _n number_:
 
-![N Numbers 3](../images/nnumbers_3.jpg)
+![N Numbers 3](../Images/nnumbers_3.jpg)
 
 Original: [How do I write a C++ program that takes n numbers and displays the greatest three?](How do I write a C++ program that takes n numbers and displays the greatest three?)
 
