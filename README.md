@@ -28,6 +28,9 @@ is in C or C++.  You might find the occasional assembly language, however.
   This request truly woke the homework trolling Sith in me, I think.  The
   previous answer was just an incident that hinted as what was to come.
 
+* [The Quickies](quickies) contain a lot of short answers to a wide variety of
+  questions.
+
 ## Useful and/or Interesting Non-Trolls
 
 * [How does passing an array as an argument to a function differ from call by value?](https://www.quora.com/How-does-passing-an-array-as-an-argument-to-a-function-differ-from-call-by-value/answer/Joe-Zbiciak)
