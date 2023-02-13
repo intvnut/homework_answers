@@ -5,7 +5,7 @@ appears most often in a given string.  But, to find tha character, we need to
 count the occurrences of _all_ distinct characters in the string.  So, I've
 opted to name entry this after that process.
 
-This compact C++ program goes off in a space cadet question making heavy use
+This compact C++ program goes off in a space cadet direction making heavy use
 of standard library facilities and templates to remain generic, even though
 such genericity isn't particularly useful.  The code isn't specific to
 `std::string`, at the very least, so in principle you could pass wide-character
