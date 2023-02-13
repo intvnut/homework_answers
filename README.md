@@ -55,10 +55,10 @@ Also, I won't be including _every_ such answer.  Some are better than others.
 
 Also check out:
 
-* [`digit_adaptor`](../digit_adaptor)
-* [`projection_iterator`](../projection_iterator)
-* [`sort_linked_list`](../sort_linked_list)
-* [`simple_vm`](../simple_vm)
+* [`digit_adaptor`](http://github.com/intvnut/digit_adaptor)
+* [`projection_iterator`](http://github.com/intvnut/projection_iterator)
+* [`sort_linked_list`](http://github.com/intvnut/sort_linked_list)
+* [`simple_vm`](http://github.com/intvnut/simple_vm)
 
 ____
 
