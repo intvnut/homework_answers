@@ -8,7 +8,7 @@ My answer is anything but straightforard. I decided to implement a _bitslice_
 implementation of the algorithm.  Bitslice implementations put different
 iterations of a loop in separate _bits_ within most of the words involved.
 
-A single `AND`, `OR, `XOR`, or `NOT` on a 64-bit value applies that same
+A single `AND`, `OR`, `XOR`, or `NOT` on a 64-bit value applies that same
 operation on a single bit across 64 loop iterations.
 
 Since most of the operations involved in this code only require 3 to 4 bits,
@@ -18,9 +18,9 @@ pursuing a bitslice implementation.
 And... bitslice implementations tend to be completely opaque to someone who
 has no idea what's going on.
 
-In this directory, the `quora\_r3db.c` file has what I posted to Quora.  The
+In this directory, the `quora_r3db.c` file has what I posted to Quora.  The
 `r3db.c` file adds a ton of comments, attempting to explain what's going on.
-The `r3db\_opt.c` file represents my attempts at optimizing the code for raw
+The `r3db_opt.c` file represents my attempts at optimizing the code for raw
 performance.  It may have some rough edges, but I did try to clean up the parts
 that count most for understanding what's going on. 
 
