@@ -49,7 +49,7 @@ weeks going through my history, cataloging most of my creative programming
 homework answers here. 
 
 Also, I haven't included _every_ such answer.  Some are better than others, and
-a few were left on the cutting room floor..
+a few were left on the cutting room floor.
 
 ## My Other Quora-Related Repos
 
