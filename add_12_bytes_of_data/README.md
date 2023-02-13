@@ -9,7 +9,7 @@ reproduced the entire post below the cut.
 
 Original: [What is a program to add 12 bytes of data using 3 types of registers?](https://www.quora.com/What-is-a-program-to-add-12-bytes-of-data-using-3-types-of-registers/answer/Joe-Zbiciak)
 
-__
+---
 
 What is it? Woefully underspecified, I'd say. You don't give a language, a
 processor, the precision of the result, or even where we can find these 12
@@ -184,7 +184,7 @@ I don't see how to make it faster. Deep pipelines want bigger datasets!
 In any case, I doubt this is what your teacher had in mind. It is, however, a
 valid way to attack this problem. Now do your homework.  
 
-__
+---
 
 _Note: I spent ~20 years working with that DSP family, but I haven’t
 written any real code on it since I left that position 5 years ago.

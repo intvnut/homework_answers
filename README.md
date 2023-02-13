@@ -21,7 +21,7 @@ is in C or C++.  You might find the occasional assembly language, however.
 
 ## Highlights
 
-* [Print 1 to 100 without a loop or recursion](print_1_to_100_without_a_loop_or_recursionA)
+* [Print 1 to 100 without a loop or recursion](print_1_to_100_without_a_loop_or_recursion)
   seems to be where it all truly started.  I had some snarky homework answers
   before that, but this is likely where I first crossed the line.
 * [Sum of even numbers between 1 and 100 using `goto`](sum_of_evens_1_to_100_with_goto)
@@ -32,7 +32,7 @@ is in C or C++.  You might find the occasional assembly language, however.
 
 * [How does passing an array as an argument to a function differ from call by value?](https://www.quora.com/How-does-passing-an-array-as-an-argument-to-a-function-differ-from-call-by-value/answer/Joe-Zbiciak)
 * [In C, how do I convert between a character pointer and a character array?](https://www.quora.com/In-C-how-do-I-convert-between-a-character-pointer-and-a-character-array/answer/Joe-Zbiciak)
-* [https://www.quora.com/What-is-some-non-obfuscated-Perl-code-that-does-something-unexpected/answer/Joe-Zbiciak](https://www.quora.com/What-is-some-non-obfuscated-Perl-code-that-does-something-unexpected/answer/Joe-Zbiciak)
+* [What is some non-obfuscated Perl code that does something unexpected?](https://www.quora.com/What-is-some-non-obfuscated-Perl-code-that-does-something-unexpected/answer/Joe-Zbiciak)
 
 ## Administrivia
 

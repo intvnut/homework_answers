@@ -1,4 +1,4 @@
-# C: Take 7 Number as Input and Calculate Their Average
+# C: Take 7 Numbers as Input and Calculate Their Average
 
 I decided it would be best to take advantage of the fact that we know we're
 receiving 7 inputs to average, while we take the inputs.   And I won't say
