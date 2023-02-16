@@ -1,6 +1,7 @@
 # C++: Count Occurrences of a Given Character Recursively
 
-Here, I channel some LISP, leading Joshua Gross to say:
+Here, I channel some LISP, leading [Joshua Gross](https://www.quora.com/profile/Joshua-Gross-8)
+to say:
 
 > Joe, it's rare that code produces a genuine emotional response in me,
 > but this has me both giddy and frightened. It somehow simultaneously
@@ -11,7 +12,7 @@ Here, I channel some LISP, leading Joshua Gross to say:
 
 Such a beautiful compliment.  `:-)`
 
-And as Jerry Coffin put it:
+And as [Jerry Coffin](https://www.quora.com/profile/Jerry-Coffin-2) put it:
 
 > To quote from the Unlambda propaganda, “your functional programming
 > nightmares come true.”
