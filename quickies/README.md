@@ -548,7 +548,7 @@ Original: [How can we write a simple program in C++ to print a prime number just
 
 ## C: Find the Sum of the Hailstone Sequence
 
-The hailstone seqquence comes from the
+The hailstone sequence comes from the
 [Collatz conjecture.](https://en.wikipedia.org/wiki/Collatz_conjecture).
 For our purposes, it doesn't matter whether all starting points end up
 reaching a cycle.  What matters is that the sequence doesn't terminate, and
